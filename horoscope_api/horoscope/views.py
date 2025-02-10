@@ -1,8 +1,14 @@
-from django.http import JsonResponse
-from rest_framework.decorators import api_view
+import asyncio
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from .utils import scrape_horoscope
 
-@api_view(["GET"])
-def get_horoscope(request):
-    data = scrape_horoscope()
-    return JsonResponse({"horoscope": data}, safe=False)
+class HoroscopeAPIView(APIView):
+    """ DRF API View to return horoscope data """
+
+    def get(self, request):
+        """ Handles GET request for horoscope data """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(scrape_horoscope())
+        return Response(result)

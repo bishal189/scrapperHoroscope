@@ -1,73 +1,62 @@
-import requests
+import aiohttp
+import asyncio
 from bs4 import BeautifulSoup
 
-# base url 
 BASE_URL = "https://www.astroved.com"
 
-def scrape_horoscope():
-    """ Scrapes all horoscope links and their details """
-    url = f"{BASE_URL}/horoscope/"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        # Extract all horoscope sign links
-        horoscope_links = soup.find_all("a", href=True)
-        horoscope_links = [a["href"] for a in horoscope_links if "/horoscopes/daily-horoscope/" in a["href"]]
-
-        results = []
-        for link in horoscope_links:
-            sign_url = f"{BASE_URL}{link}"
-            sign_name = link.split("/")[-1].capitalize() 
-
-            print(f"Fetching {sign_name} Horoscope from {sign_url}")
-
-            # Fetch horoscope details
-            horoscope_data = scrape_horoscope_details(sign_url)
-
-            # Append to results
-            results.append({"sign": sign_name, "details": horoscope_data})
-
-        return results
-
-    else:
-        return {"error": f"Failed to fetch data, status code {response.status_code}"}
-
-
-def scrape_horoscope_details(url):
-    """ Fetches detailed horoscope information from the horoscope page """
-    
+async def fetch(session, url):
+    """ Fetch page content asynchronously """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     }
+    async with session.get(url, headers=headers) as response:
+        return await response.text() if response.status == 200 else None
 
-    response = requests.get(url, headers=headers)
+async def scrape_horoscope():
+    """ Scrapes all horoscope links and their details asynchronously """
+    url = f"{BASE_URL}/horoscope/"
 
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
+    async with aiohttp.ClientSession() as session:
+        page_content = await fetch(session, url)
 
-        horoscope_section = soup.find("div", class_="horo-title")
+        if not page_content:
+            return {"error": "Failed to fetch main horoscope page"}
 
-        if not horoscope_section:
-            return {"status": "fail", "message": "Horoscope section not found"}
+        soup = BeautifulSoup(page_content, "html.parser")
 
-        result = {}
+        # Extract all horoscope sign links
+        horoscope_links = [a["href"] for a in soup.find_all("a", href=True) if "/horoscopes/daily-horoscope/" in a["href"]]
 
-        headers = horoscope_section.find_all("h3")  
-        descriptions = horoscope_section.find_all("p")  
+        # Create tasks for concurrent fetching
+        tasks = [scrape_horoscope_details(session, f"{BASE_URL}{link}", link.split("/")[-1].capitalize()) for link in horoscope_links]
 
-        for header, description in zip(headers, descriptions):
-            category = header.get_text(strip=True)  
-            description_text = description.get_text(strip=True) 
-            result[category] = {"description": description_text}
+        # Run tasks concurrently
+        results = await asyncio.gather(*tasks)
 
-        return result
+        return results
 
-    else:
-        return {"error": f"Failed to fetch data, status code {response.status_code}"}
+async def scrape_horoscope_details(session, url, sign_name):
+    """ Fetches detailed horoscope information asynchronously """
+    page_content = await fetch(session, url)
+
+    if not page_content:
+        return {"sign": sign_name, "error": f"Failed to fetch {sign_name} horoscope"}
+
+    soup = BeautifulSoup(page_content, "html.parser")
+    
+    horoscope_section = soup.find("div", class_="horo-title")
+
+    if not horoscope_section:
+        return {"sign": sign_name, "status": "fail", "message": "Horoscope section not found"}
+
+    result = {"sign": sign_name, "horoscope": {}}
+
+    headers = horoscope_section.find_all("h3")  
+    descriptions = horoscope_section.find_all("p")  
+
+    for header, description in zip(headers, descriptions):
+        category = header.get_text(strip=True)  
+        description_text = description.get_text(strip=True) 
+        result["horoscope"][category] = description_text
+
+    return result

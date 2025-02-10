@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import get_horoscope
+from .views import HoroscopeAPIView
 
 urlpatterns = [
-    path("horoscope/", get_horoscope, name="get_horoscope"),
+    path("horoscope/", HoroscopeAPIView.as_view(), name="horoscope-api"),
 ]
