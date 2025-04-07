@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from .utils import scrape_sulekha_events
+from . utils import scrape_sulekha_events
 
 # Create your views here.
 
