@@ -1,10 +1,9 @@
-import requests
+
 from bs4 import BeautifulSoup
 import logging
-import re
 import time
 import random
-from urllib.parse import urljoin
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ def scrape_sulekha_events(city):
         soup = BeautifulSoup(response.text, 'html.parser')
         categorized_events = {}
         
-        # 1. Find all regular section containers
+        # Find all regular section containers
         section_containers = soup.select("section.container.container-max")
         
         for section in section_containers:
@@ -63,98 +62,159 @@ def scrape_sulekha_events(city):
                     logger.error(f"Error parsing event card: {e}")
                     continue
         
-
-        # 2. IMPROVED: Find "Events Near [City] Metro Area" section
-        events_near_title = f"Events Near {city.title()} Metro Area"
-        
-        # APPROACH 1: Look for the notitle section that contains the text "Events Near [City] Metro Area"
-        notitle_sections = soup.select("section.notitle")
-        events_near_section = None
-        
-        for section in notitle_sections:
-            section_text = section.get_text().strip()
-            if re.search(r"Events\s+Near\s+.*\s+Metro\s+Area", section_text, re.IGNORECASE):
-                events_near_title = section_text
-                # The actual events are in the next section with class global-event
-                events_near_section = section.find_next_sibling("section.global-eventwarp, section.global-event")
-                break
-        
-        # APPROACH 2: Look directly for the global-eventwarp section
-        if not events_near_section:
-            global_event_sections = soup.select("section.global-eventwarp, section.global-event")
-            for section in global_event_sections:
-                # Check if there's a preceding section with the "Events Near" text
-                prev_section = section.find_previous_sibling("section")
-                if prev_section and "Events Near" in prev_section.get_text():
-                    events_near_section = section
-                    events_near_title = prev_section.get_text().strip()
-                    break
-        
-        # APPROACH 3: Look for the section that contains both the title and events
-        if not events_near_section:
-            for section in soup.select("section.global-eventwarp"):
-                # Check if this section contains a div with the "Events Near" text
-                title_divs = section.select("div")
-                for div in title_divs:
-                    if "Events Near" in div.get_text() and city.lower() in div.get_text().lower():
-                        events_near_section = section
-                        events_near_title = div.get_text().strip()
-                        break
-                if events_near_section:
-                    break
-        
-        # Process the Events Near section if found
-        if events_near_section:
-            # Make sure we have the category in our events dictionary
-            if events_near_title not in categorized_events:
-                categorized_events[events_near_title] = []
-            
-            # Extract events from different possible structures
-            
-            # Structure 1: Event cards within this section
-            event_cards = events_near_section.select(".event-card")
-            for card in event_cards:
-                try:
-                    event_data = extract_event_data_from_card(card)
-                    if event_data:
-                        categorized_events[events_near_title].append(event_data)
-                except Exception as e:
-                    logger.error(f"Error parsing event card in Events Near section: {e}")
-                    continue
-            
-            # Structure 2: Articles within global-event section
-            event_articles = events_near_section.select("article.global-eventlist")
-            for article in event_articles:
-                try:
-                    event_data = extract_event_data_from_nearby_article(article)
-                    if event_data:
-                        categorized_events[events_near_title].append(event_data)
-                except Exception as e:
-                    logger.error(f"Error parsing nearby event article: {e}")
-                    continue
-            
-            # Structure 3: Event card areas within articles
-            event_card_areas = events_near_section.select("article section.eventcardarea")
-            if event_card_areas and not categorized_events[events_near_title]:
-                for card_area in event_card_areas:
-                    try:
-                        event_data = extract_event_data_from_card_area(card_area)
-                        if event_data:
-                            categorized_events[events_near_title].append(event_data)
-                    except Exception as e:
-                        logger.error(f"Error parsing event card area: {e}")
-                        continue
-                    
-            # Log what we found
-            logger.info(f"Found {len(categorized_events.get(events_near_title, []))} events in '{events_near_title}' section")
-        else:
-            logger.warning(f"Could not find 'Events Near {city} Metro Area' section")
+        # NEW: Find and scrape the "Upcoming Events" section
+        upcoming_events = scrape_upcoming_events(soup, city)
+        if upcoming_events:
+            categorized_events.update(upcoming_events)
         
         return categorized_events
     
     except requests.RequestException as e:
         logger.error(f"Error fetching events: {e}")
         return {"error": str(e)}
+
+def scrape_upcoming_events(soup, city):
+    """
+    Scrape the "Upcoming Events" section from the Sulekha website
+    """
+    try:
+        # Find the "Upcoming Events" section
+        upcoming_section = soup.select_one("section.global-eventwarp")
+        if not upcoming_section:
+            logger.warning(f"Could not find 'Upcoming Events' section for {city}")
+            return {}
+        
+        # Extract the section title
+        title_elem = upcoming_section.select_one(".discover-titlewarp .maintitle")
+        if not title_elem:
+            # Try alternative title selector
+            title_elem = upcoming_section.select_one(".discover-titlewarp h2.maintitle")
+        
+        section_title = "Upcoming Events"
+        if title_elem:
+            section_title = title_elem.text.strip()
+        
+        # Initialize the events list for this category
+        upcoming_events = {section_title: []}
+        
+        # Find all event cards within the "Upcoming Events" section
+        event_articles = upcoming_section.select("article.global-eventlist")
+        
+        for article in event_articles:
+            try:
+                event_card_area = article.select_one("section.eventcardarea")
+                if event_card_area:
+                    event_data = extract_event_data_from_upcoming_card(event_card_area, article)
+                    if event_data:
+                        upcoming_events[section_title].append(event_data)
+            except Exception as e:
+                logger.error(f"Error parsing upcoming event card: {e}")
+                continue
+        
+        logger.info(f"Found {len(upcoming_events.get(section_title, []))} events in '{section_title}' section")
+        return upcoming_events
+    
+    except Exception as e:
+        logger.error(f"Error scraping upcoming events: {e}")
+        return {}
+
+def extract_event_data_from_upcoming_card(card_area, article=None):
+    """
+    Extract event data from an upcoming event card area
+    """
+    # Extract basic info
+    title_elem = card_area.select_one(".event-info .title h3 a")
+    date_elem = card_area.select_one(".event-info .date")
+    venue_elem = card_area.select_one(".event-info .location b")
+    location_elem = card_area.select_one(".event-info .location a")
+    status_elem = card_area.select_one(".event-info .batch")
+    image_elem = card_area.select_one(".event-img figure a img")
+    
+    # Extract event ID and URL from article attributes
+    event_id = None
+    event_url = None
+    
+    if article:
+        if article.has_attr('id'):
+            id_parts = article['id'].split('-')
+            if len(id_parts) > 1:
+                event_id = id_parts[-1]
+        
+        if article.has_attr('data-filter-url'):
+            event_url = article['data-filter-url']
+    
+    # Extract performers/lineup
+    performers = []
+    lineup_elem = card_area.select_one(".event-info .lineup")
+    if lineup_elem:
+        for artist_link in lineup_elem.select("a"):
+            performers.append(artist_link.text.strip())
+    
+    # Clean and format extracted data
+    title = title_elem.text.strip() if title_elem else "N/A"
+    
+    # Handle link extraction
+    link = "#"
+    if title_elem and title_elem.has_attr('href'):
+        href = title_elem['href']
+        link = f"https://events.sulekha.com{href}" if href.startswith('/') else href
+    
+    # Extract date and clean it
+    date = "N/A"
+    if date_elem:
+        date_text = date_elem.text.strip()
+        # Remove the SVG icon text if present
+        icon_elem = date_elem.select_one("i")
+        if icon_elem:
+            icon_text = icon_elem.text.strip()
+            date_text = date_text.replace(icon_text, "").strip()
+        date = date_text
+    
+    venue = venue_elem.text.strip() if venue_elem else "N/A"
+    location = location_elem.text.strip() if location_elem else "N/A"
+    status = status_elem.text.strip() if status_elem else "N/A"
+    image = image_elem['src'] if image_elem and image_elem.has_attr('src') else None
+    
+    # Price can be in different locations depending on the card style
+    price = "N/A"
+    price_elem = card_area.select_one(".actionarea .price b")
+    if price_elem:
+        price = price_elem.text.strip()
+    else:
+        # Try alternative price location
+        alt_price_elem = card_area.select_one(".event-info .price b")
+        if alt_price_elem:
+            price = alt_price_elem.text.strip()
+    
+    # Get action type (Buy Tickets, Register, etc.)
+    action_type = "Buy Tickets"
+    action_elem = card_area.select_one(".actionarea .action a")
+    if action_elem:
+        action_text = action_elem.text.strip()
+        # Clean up the text by removing whitespace and newlines
+        action_type = ' '.join(action_text.split())
+    
+    # Extract category if available
+    category = None
+    category_elem = card_area.select_one(".event-info .lineup a[href*='category']")
+    if category_elem:
+        category = category_elem.text.strip()
+    
+    return {
+        "id": event_id,
+        "title": title,
+        "link": link,
+        "date": date,
+        "venue": venue,
+        "location": location,
+        "price": f"Starts at {price}" if price != "N/A" else "N/A",
+        "status": status,
+        "category": category,
+        "performers": performers if performers else "N/A",
+        "image": image,
+        "action_type": action_type,
+        "event_url": event_url
+    }
 
 def extract_event_data_from_card(card):
     """
@@ -210,117 +270,5 @@ def extract_event_data_from_card(card):
         "performers": performers if performers else "N/A",
         "image": image,
         "action_type": action_type.strip() if action_type else "Buy Tickets"
-    }
-
-def extract_event_data_from_nearby_article(article):
-    """
-    Extract event data from an article in the "Events Near" section
-    """
-    # Get the event card area
-    event_card_area = article.select_one("section.eventcardarea")
-    if not event_card_area:
-        return None
-    
-    return extract_event_data_from_card_area(event_card_area, article)
-
-def extract_event_data_from_card_area(card_area, article=None):
-    """
-    Extract event data from an event card area, optionally using article data
-    """
-    # Extract basic info
-    title_elem = card_area.select_one(".event-info .title h3 a")
-    date_elem = card_area.select_one(".event-info .date")
-    venue_elem = card_area.select_one(".event-info .location b")
-    location_elem = card_area.select_one(".event-info .location a")
-    status_elem = card_area.select_one(".event-info .batch")
-    image_elem = card_area.select_one(".event-img figure a img")
-    
-    # Extract event ID and URL from article attributes
-    event_id = None
-    event_url = None
-    
-    if article:
-        if article.has_attr('id'):
-            id_parts = article['id'].split('-')
-            if len(id_parts) > 1:
-                event_id = id_parts[-1]
-        
-        if article.has_attr('data-filter-url'):
-            event_url = article['data-filter-url']
-    
-    # Extract category/performer info
-    category = None
-    performer = None
-    performers = []
-    
-    lineup_elem = card_area.select_one(".event-info .lineup")
-    if lineup_elem:
-        for artist_link in lineup_elem.select("a"):
-            link_href = artist_link.get('href', '')
-            if 'artist' in link_href:
-                performers.append(artist_link.text.strip())
-            elif not category and 'category' in link_href or link_href == '/':
-                category = artist_link.text.strip()
-    
-    # Clean and format extracted data
-    title = title_elem.text.strip() if title_elem else "N/A"
-    
-    # Handle link extraction
-    link = "#"
-    if title_elem and title_elem.has_attr('href'):
-        href = title_elem['href']
-        link = f"https://events.sulekha.com{href}" if href.startswith('/') else href
-    
-    # Extract date and clean it
-    date = "N/A"
-    if date_elem:
-        date_text = date_elem.text.strip()
-        # Remove the SVG icon text if present
-        icon_elem = date_elem.select_one("i")
-        if icon_elem:
-            icon_text = icon_elem.text.strip()
-            date_text = date_text.replace(icon_text, "").strip()
-        date = date_text
-    
-    venue = venue_elem.text.strip() if venue_elem else "N/A"
-    location = location_elem.text.strip() if location_elem else "N/A"
-    status = status_elem.text.strip() if status_elem else "N/A"
-    image = image_elem['src'] if image_elem and image_elem.has_attr('src') else None
-    
-    # Price can be in different locations depending on the card style
-    price = "N/A"
-    price_elem = card_area.select_one(".actionarea .price b")
-    if price_elem:
-        price = price_elem.text.strip()
-    else:
-        # Try alternative price location
-        alt_price_elem = card_area.select_one(".event-info .price b")
-        if alt_price_elem:
-            price = alt_price_elem.text.strip()
-    
-    # Get action type (Buy Tickets, Register, etc.)
-    action_type = "Buy Tickets"
-    action_elem = card_area.select_one(".action a, .actionarea .action a")
-    if action_elem:
-        action_text = action_elem.text.strip()
-        # Clean up the text by removing whitespace and newlines
-        action_type = ' '.join(action_text.split())
-    
-    return {
-        "id": event_id,
-        "title": title,
-        "link": link,
-        "date": date,
-        "venue": venue,
-        "location": location,
-        "price": f"Starts at {price}" if price != "N/A" else "N/A",
-        "status": status,
-        "category": category,
-        "performers": performers if performers else (
-            [category] if category else "N/A"
-        ),
-        "image": image,
-        "action_type": action_type,
-        "event_url": event_url
-    }
+    };
 
