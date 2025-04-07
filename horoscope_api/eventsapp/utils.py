@@ -4,12 +4,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def scrape_sulekha_events(city="washington"):
+def scrape_sulekha_events(city):
     """
     Scrape all events from Sulekha for a given city metro area,
     organized by section/category
     """
-    url = f"https://events.sulekha.com/{city.lower()}-metro-area"
+    url = f"https://events.sulekha.com/{city.lower()}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
@@ -50,36 +50,49 @@ def scrape_sulekha_events(city="washington"):
                     logger.error(f"Error parsing event card: {e}")
                     continue
         
-        # 2. Find "Events Near Washington Metro Area" section
-        # Look for the section with class global-eventwarp
+        # 2. Find "Events Near City Metro Area" section - Fixed approach
+        nearby_title = f"Events Near {city.title()} Metro Area"
+        
+        # Look for sections that might contain nearby events
         nearby_sections = soup.select("section.global-eventwarp")
+        
         for nearby_wrapper in nearby_sections:
-            # Find the notitle section inside
-            notitle_section = nearby_wrapper.select_one("section.notitle")
-            if not notitle_section or "Events Near" not in notitle_section.text:
-                continue
-                
-            section_title = notitle_section.text.strip()
+            # Find the heading that contains the "Events Near" text
+            heading_elements = nearby_wrapper.select("h2, h3, h4")
             
-            # Initialize list for this category if it doesn't exist
-            if section_title not in categorized_events:
-                categorized_events[section_title] = []
-            
-            # Find the global-event section that follows the title section
-            global_event_section = notitle_section.find_next_sibling("section.global-event")
-            
-            if global_event_section:
-                # Find all event articles within this section
-                for article in global_event_section.select("article.global-eventlist"):
-                    try:
-                        event_data = extract_event_data_from_nearby_article(article)
-                        if event_data:
-                            categorized_events[section_title].append(event_data)
-                    except Exception as e:
-                        # Skip this event article if there's an error
-                        logger.error(f"Error parsing nearby event article: {e}")
-                        continue
+            for heading in heading_elements:
+                if nearby_title in heading.text:
+                    section_title = heading.text.strip()
                     
+                    # Initialize list for this category
+                    if section_title not in categorized_events:
+                        categorized_events[section_title] = []
+                    
+                    # Find the container with the events
+                    # This might be a sibling or child of the heading's parent
+                    event_container = nearby_wrapper.select_one("section.global-event") or heading.parent.find_next_sibling("section")
+                    
+                    if event_container:
+                        # Find all event articles within this section
+                        event_articles = event_container.select("article.global-eventlist")
+                        
+                        if not event_articles:
+                            # Try alternative selector if needed
+                            event_articles = event_container.select("article")
+                        
+                        for article in event_articles:
+                            try:
+                                event_data = extract_event_data_from_nearby_article(article)
+                                if event_data:
+                                    categorized_events[section_title].append(event_data)
+                            except Exception as e:
+                                # Skip this event article if there's an error
+                                logger.error(f"Error parsing nearby event article: {e}")
+                                continue
+                    
+                    # Break after finding and processing the correct heading
+                    break
+        
         return categorized_events
     
     except requests.RequestException as e:
@@ -221,3 +234,4 @@ def extract_event_data_from_nearby_article(article):
         "action_type": action_type.strip() if action_type else "Buy Tickets",
         "event_url": event_url
     }
+
