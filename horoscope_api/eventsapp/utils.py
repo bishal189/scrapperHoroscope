@@ -30,6 +30,7 @@ def scrape_sulekha_events(city):
         
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
+        print("url",url,response)
         
         soup = BeautifulSoup(response.text, 'html.parser')
         categorized_events = {}

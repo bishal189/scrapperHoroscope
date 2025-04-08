@@ -1,13 +1,118 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from . utils import scrape_sulekha_events
+from .utils import scrape_sulekha_events
 
 # Create your views here.
 
-def events(request):
-    city = request.GET.get("city", "")
-    if not city:
-        return JsonResponse({"error": "City parameter is required."}, status=400)
 
-    events = scrape_sulekha_events(city)
-    return JsonResponse({"city": city.capitalize(), "events": events})
+def events(request):
+    cities = {
+        "Austin": "austin-metro-area",
+        "Dallas": "dallas-fortworth-area",
+        "Houston": "houston-metro-area",
+        "Los Angeles": "los-angeles-metro-area",
+        "New York": "new-york-metro-area",
+        "Philadelphia": "philadelphia-metro-area",
+        "Miami": "miami-metro-area",
+        "San Francisco": "bay-area",
+        "Chicago": "chicago-metro-area",
+        "Boston": "boston-metro-area",
+        "Seattle": "seattle-metro-area",
+        "Denver": "denver-metro-area",
+        "Atlanta": "atlanta-metro-area",
+        "Phoenix": "phoenix-metro-area",
+        "San Diego": "san-diego-metro-area",
+        "Las Vegas": "las-vegas-metro-area",
+        "Portland": "portland-metro-area",
+        "Detroit": "detroit-metro-area",
+        "Baltimore": "baltimore-metro-area",
+        "Charlotte": "research-triangle-area",
+        "Minneapolis": "st-paul-metro-area",
+        "Tampa": "tampa-metro-area",
+        "St. Louis": "",
+        "New Orleans": "new-orleans-metro-area",
+        "Salt Lake City": "ogden-metro-area",
+        "Indianapolis": "indianapolis-metro-area",
+        "Cleveland": "cleveland-metro-area",
+        "Cincinnati": "cincinnati-metro-area",
+        "Kansas City": "kansas-city-metro-area",
+        "Omaha": "omaha-metro-area",
+        "Oakland": "bay-area",
+        "Orlando": "orlando-metro-area",
+        "Sacramento": "sacramento-metro-area",
+        "Nashville": "nashville-metro-area",
+        "Milwaukee": "milwaukee-metro-area",
+        "Raleigh": "",
+        "Memphis": "memphis-metro-area",
+        "Portland": "portland-metro-area",
+        "Virginia Beach": "",
+        "Albuquerque": "albuquerque-metro-area",
+        "Tulsa": "",
+        "Fresno": "",
+        "Columbus": "",
+        "Wichita": "",
+        "Pittsburgh": "",
+        "Anchorage": "anchorage-metro-area",
+        "Honolulu": "honolulu-metro-area",
+        "Colorado Springs": "",
+        "El Paso": "",
+        "Lexington": "lexington-metro-area",
+        "Reno": "",
+        "Boise": "boise-metro-area",
+        "Spokane": "",
+        "Baton Rouge": "",
+        "Des Moines": "des-moines-metro-area",
+        "Fort Worth": "",
+        "Jacksonville": "",
+        "Little Rock": "",
+        "Madison": "madison-metro-area",
+        "Providence": "providence-metro-area",
+        "Richmond": "richmond-metro-area",
+        "Sioux Falls": "sioux-falls-metro-area",
+        "Springfield": "",
+        "Tucson": "",
+        "Bakersfield": "",
+        "Chattanooga": "",
+        "Durham": "",
+        "Fargo": "fargo-metro-area",
+        "Green Bay": "",
+        "Harrisburg": "",
+        "Lubbock": "",
+        "Mobile": "",
+        "Modesto": "",
+        "Montgomery": "montgomery-metro-area",
+        "Newark": "",
+        "Norfolk": "",
+        "Olympia": "",
+        "Peoria": "",
+        "Rochester": "",
+        "Salem": "",
+        "Santa Fe": "",
+        "Syracuse": "",
+        "Topeka": "",
+        "Wilmington": "",
+        "Augusta": "",
+        "Bismarck": "bismarck-metro-area",
+        "Cheyenne": "cheyenne-metro-area",
+        "Dover": "",
+        "Helena": "",
+        "Jefferson City": "",
+        "Lincoln": "",
+        "Montpelier": "",
+        "Tallahassee": "",
+        "San Jose": "",
+        "Fort Lauderdale": "",
+        "Riverside": "",
+        "Corpus Christi": "",
+        "Stockton": "",
+        "Santa Ana": "",
+        "St. Paul": "",
+    }
+    for city_key, city_value in cities.items():
+        if not city_key:
+            return JsonResponse({"error": "City parameter is required."}, status=400)
+
+        events = scrape_sulekha_events(city_value)
+
+        print({"city": city_key, "events": events})
+        # return JsonResponse({"city": city.capitalize(), "events": events})
