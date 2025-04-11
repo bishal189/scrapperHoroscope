@@ -3,6 +3,42 @@ from django.http import JsonResponse
 from .utils import scrape_sulekha_events
 
 # Create your views here.
+from .models import CommunityEvents, Mastercity
+from datetime import datetime
+
+
+def insert_events_into_db(data):
+    city_name = data["city"]
+    all_events = []
+    city_entry = Mastercity.objects.get(city__iexact=city_name)
+    state_name = city_entry.state
+
+    # Flatten all event lists across categories
+    for category, events in data["events"].items():
+        if isinstance(events, list):
+            all_events.extend(events)
+
+    for event in all_events:
+        try:
+            CommunityEvents.objects.create(
+                name=event.get("title", ""),
+                state=state_name,
+                time="",  # Not using original time since it's inside date string
+                location=event.get("location", ""),
+                description=", ".join(event.get("performers", [])),
+                city=city_name,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+                cover_image=event.get("image", ""),
+                price=event.get("price", ""),
+                venue=event.get("venue", ""),
+                link=event.get("link", ""),
+                event_date=event.get("date", ""),
+            )
+            print(f"Inserted: {event.get('title')}")
+            return
+        except Exception as e:
+            print(f"Failed to insert {event.get('title')}: {e}")
 
 
 def events(request):
@@ -114,5 +150,6 @@ def events(request):
 
         events = scrape_sulekha_events(city_value)
 
-        print({"city": city_key, "events": events})
+        insert_events_into_db({"city": city_key, "events": events})
+        return
         # return JsonResponse({"city": city.capitalize(), "events": events})

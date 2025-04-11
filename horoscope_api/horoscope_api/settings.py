@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,11 +87,14 @@ WSGI_APPLICATION = "horoscope_api.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DEV_DB"),
+        "NAME": os.environ.get("POSTGRES_DEV_DATABASE"),
         "USER": os.environ.get("POSTGRES_DEV_USER", ""),
         "PASSWORD": os.environ.get("POSTGRES_DEV_PASSWORD", ""),
         "HOST": os.environ.get("POSTGRES_DEV_HOST", ""),
         "PORT": os.environ.get("POSTGRES_DEV_PORT", ""),
+        "OPTIONS": {
+            "options": "-c search_path=dbo,public",
+        },
     }
 }
 
