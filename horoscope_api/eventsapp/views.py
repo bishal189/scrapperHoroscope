@@ -11,7 +11,7 @@ from django.utils import timezone
 def insert_events_into_db(data):
     city_name = data["city"]
     all_events = []
-    city_entry = Mastercity.objects.get(city__iexact=city_name)
+    city_entry = Mastercity.objects.filter(city__iexact=city_name)[0]
     state_name = city_entry.state
 
     # Flatten all event lists across categories
