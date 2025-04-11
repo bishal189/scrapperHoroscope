@@ -13,6 +13,7 @@ class CommunityEvents(models.Model):
     cover_image = models.TextField(blank=True, null=True)
     price = models.TextField(blank=True, null=True)
     venue = models.TextField(blank=True, null=True)
+    performers = models.TextField(blank=True, null=True)
     link = models.TextField(blank=True, null=True)
     event_date = models.TextField(blank=True, null=True)
 

@@ -4,7 +4,8 @@ from .utils import scrape_sulekha_events
 
 # Create your views here.
 from .models import CommunityEvents, Mastercity
-from datetime import datetime
+
+from django.utils import timezone
 
 
 def insert_events_into_db(data):
@@ -20,6 +21,31 @@ def insert_events_into_db(data):
 
     for event in all_events:
         try:
+
+            name = event.get("title", "")
+            state = state_name
+            city = city_name
+            location = event.get("location", "")
+            venue = event.get("venue", "")
+            price = event.get("price", "")
+            event_date = event.get("date", "")
+            performers = event.get("performers", "")
+
+            # Check if this event already exists
+            exists = CommunityEvents.objects.filter(
+                state=state,
+                city=city,
+                price=price,
+                performers=performers,
+                event_date=event_date,
+                venue=venue,
+                location=location,
+            ).exists()
+
+            if exists:
+                print(f"Already exists: {name}")
+                continue
+
             CommunityEvents.objects.create(
                 name=event.get("title", ""),
                 state=state_name,
@@ -27,8 +53,9 @@ def insert_events_into_db(data):
                 location=event.get("location", ""),
                 description=", ".join(event.get("performers", [])),
                 city=city_name,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
+                created_at=timezone.now(),
+                updated_at=timezone.now(),
+                performers=event.get("performers", ""),
                 cover_image=event.get("image", ""),
                 price=event.get("price", ""),
                 venue=event.get("venue", ""),
@@ -36,7 +63,6 @@ def insert_events_into_db(data):
                 event_date=event.get("date", ""),
             )
             print(f"Inserted: {event.get('title')}")
-            return
         except Exception as e:
             print(f"Failed to insert {event.get('title')}: {e}")
 
@@ -151,5 +177,4 @@ def events(request):
         events = scrape_sulekha_events(city_value)
 
         insert_events_into_db({"city": city_key, "events": events})
-        return
         # return JsonResponse({"city": city.capitalize(), "events": events})
