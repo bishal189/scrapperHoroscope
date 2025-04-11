@@ -170,6 +170,7 @@ def events(request):
         "Santa Ana": "los-angeles-metro-area",
         "St. Paul": "st-paul-metro-area",
     }
+
     for city_key, city_value in cities.items():
         if not city_key:
             return JsonResponse({"error": "City parameter is required."}, status=400)
@@ -177,4 +178,7 @@ def events(request):
         events = scrape_sulekha_events(city_value)
 
         insert_events_into_db({"city": city_key, "events": events})
-        # return JsonResponse({"city": city.capitalize(), "events": events})
+
+    return JsonResponse(
+        {"status": "Success", "message": "Events retrieved Successfully"}, status=200
+    )
