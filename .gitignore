@@ -5,6 +5,7 @@ src/db.sqlite3
 db.sqlite3
 nohup.out
 
+horoscope_api/.env
 
 *.aac
 *.mp4
