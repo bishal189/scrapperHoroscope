@@ -32,7 +32,7 @@ def insert_events_into_db(data):
             performers = event.get("performers", "")
 
             # Check if this event already exists
-            exists = CommunityEvents.objects.filter(
+            existing = CommunityEvents.objects.filter(
                 state=state,
                 city=city,
                 price=price,
@@ -40,18 +40,18 @@ def insert_events_into_db(data):
                 event_date=event_date,
                 venue=venue,
                 location=location,
-            ).exists()
+            )
 
-            if exists:
+            if existing.exists():
                 print(f"Already exists: {name}")
-                continue
+                existing.delete()
 
             CommunityEvents.objects.create(
                 name=event.get("title", ""),
                 state=state_name,
                 time="",  # Not using original time since it's inside date string
                 location=event.get("location", ""),
-                description=", ".join(event.get("performers", [])),
+                description=event.get("description", ""),
                 city=city_name,
                 created_at=timezone.now(),
                 updated_at=timezone.now(),

@@ -64,4 +64,12 @@ local_settings.py
 
 node_modules/
 
+__pycache__
+horoscope_api/horoscope_api/__pycache__/*
+horoscope_api/horoscope_api/__pycache__
+horoscope_api/horoscope/__pycache__
+horoscope_api/horoscope/__pycache__/*
+horoscope_api/horoscope/__pycache__/
+horoscope_api/eventsapp/__pycache__/
+horoscope_api/eventsapp/__pycache__/*
 
