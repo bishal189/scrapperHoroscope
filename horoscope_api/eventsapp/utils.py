@@ -228,6 +228,11 @@ def extract_event_data_from_upcoming_card(card_area, article=None):
         # Add organizer details
         if "organizer_details" in event_details_data and event_details_data["organizer_details"]:
             event_data["organizer_details"] = event_details_data["organizer_details"]
+
+        # Add ticket information
+        if "ticket_information" in event_details_data and event_details_data["ticket_information"]:
+            event_data["ticket_information"] = event_details_data["ticket_information"]
+            
     
     return event_data
 
@@ -271,15 +276,19 @@ def extract_event_details_inside_link(link):
 
         # Extract artist details
         artist_details = extract_artist_details(soup)
-        print(artist_details,'artist details')
         if artist_details:
             event_details["artist_details"] = artist_details
         
         # Extract organizer details
         organizer_details = extract_organizer_details(soup)
-        print(organizer_details,'organizer details')
         if organizer_details:
             event_details["organizer_details"] = organizer_details
+            
+
+        # Extract ticket information
+        ticket_info = extract_ticket_information(soup)
+        if ticket_info:
+            event_details["ticket_information"] = ticket_info
             
         # Extract other sections if needed (organizer info, etc.)
         # Add more sections here as needed
@@ -689,3 +698,80 @@ def extract_organizer_details(soup):
             organizer_details["events"] = events_list
     
     return organizer_details
+
+
+def extract_ticket_information(soup):
+    """
+    Extract ticket information including prices, categories, and availability
+    """
+    ticket_section = soup.select_one("section.tkt-wraper.ACTION-sec-ticket")
+    if not ticket_section:
+        return None
+    
+    ticket_info = {}
+    
+    # Extract section title
+    title_elem = ticket_section.select_one("h2")
+    if title_elem:
+        # Get the text but exclude the button text
+        button = title_elem.select_one("a")
+        if button:
+            button.extract()  # Remove the button from the title
+        ticket_info["title"] = title_elem.text.strip()
+    
+    # Extract all ticket types
+    ticket_types = []
+    ticket_articles = ticket_section.select("article.tkt-wrap")
+    
+    for article in ticket_articles:
+        ticket_type = {}
+        
+        # Extract ticket category/title
+        category_elem = article.select_one("b.tkt-title")
+        if category_elem:
+            ticket_type["category"] = category_elem.text.strip()
+        
+        # Extract ticket description
+        desc_elem = article.select_one("small.tkt-desc")
+        if desc_elem and desc_elem.text.strip():
+            ticket_type["description"] = desc_elem.text.strip()
+        
+        # Extract ticket price
+        price_elem = article.select_one("small.tkt-price-wrp")
+        if price_elem:
+            ticket_type["price"] = price_elem.text.strip()
+        
+        # Extract ticket status
+        status_elem = article.select_one("span.tkt-status")
+        if status_elem:
+            ticket_type["status"] = status_elem.text.strip()
+            # Check if it's almost sold out (has red class)
+            if status_elem.has_attr("class") and "red" in status_elem["class"]:
+                ticket_type["almost_sold_out"] = True
+        
+        # Extract ticket closing date
+        closing_date_elem = article.select_one("div.tktopnstatus b")
+        if closing_date_elem:
+            ticket_type["closing_date"] = closing_date_elem.text.strip()
+        
+        # Extract any other available information
+        closing_text_elem = article.select_one("div.tktopnstatus span")
+        if closing_text_elem:
+            ticket_type["closing_text"] = closing_text_elem.text.strip()
+        
+        if ticket_type:  # Only add if we have some info
+            ticket_types.append(ticket_type)
+    
+    # Add ticket types to ticket info
+    if ticket_types:
+        ticket_info["ticket_types"] = ticket_types
+    
+    # Extract action button if available
+    action_btn = ticket_section.select_one("article.tkt-totalbg a.buy-btn")
+    if action_btn:
+        ticket_info["action_button"] = {
+            "text": action_btn.text.strip(),
+            "onclick": action_btn.get("onclick", "") if action_btn.has_attr("onclick") else ""
+        }
+    
+    return ticket_info
