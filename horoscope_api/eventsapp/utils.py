@@ -187,8 +187,11 @@ def extract_event_data_from_upcoming_card(card_area, article=None):
     if category_elem:
         category = category_elem.text.strip()
 
-    event_details = extract_event_details_inside_link(link)
-    return {
+    # Get comprehensive event details including description and venue details
+    event_details_data = extract_event_details_inside_link(link)
+    
+    # Create a comprehensive event data dictionary
+    event_data = {
         "id": event_id,
         "title": title,
         "link": link,
@@ -200,13 +203,31 @@ def extract_event_data_from_upcoming_card(card_area, article=None):
         "category": category,
         "performers": performers if performers else "N/A",
         "image": image,
-        "description":event_details,
         "action_type": action_type,
         "event_url": event_url,
     }
+    
+    # Add detailed event information if available
+    if event_details_data:
+        # Add description
+        if "description" in event_details_data:
+            event_data["description"] = event_details_data["description"]
+        
+        # Add venue details
+        if "venue_details" in event_details_data and event_details_data["venue_details"]:
+            event_data["venue_details"] = event_details_data["venue_details"]
+            
+        # Add terms and conditions
+        if "terms_and_conditions" in event_details_data and event_details_data["terms_and_conditions"]:
+            event_data["terms_and_conditions"] = event_details_data["terms_and_conditions"]
+    
+    return event_data
 
 
 def extract_event_details_inside_link(link):
+    """
+    Extract comprehensive event details including description, venue information, and terms & conditions
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -217,19 +238,259 @@ def extract_event_details_inside_link(link):
         "Cache-Control": "max-age=0",
     }
 
-    response = requests.get(link, headers=headers, timeout=15)
-    response.raise_for_status()
-    print("link", link)
-    soup = BeautifulSoup(response.text, "html.parser")
-    section = soup.select_one("section.ACTION-sec-eventdetails")
-    formatted_output = extract_formatted_paragraphs(section)
-    return formatted_output
+    try:
+        response = requests.get(link, headers=headers, timeout=15)
+        response.raise_for_status()
+        print("link", link)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        event_details = {}
+        
+        # Extract event description
+        description_section = soup.select_one("section.ACTION-sec-eventdetails")
+        if description_section:
+            event_details["description"] = extract_formatted_paragraphs(description_section)
+        
+        # Extract venue details
+        venue_details = extract_venue_details(soup)
+        if venue_details:
+            event_details["venue_details"] = venue_details
+        
+        # Extract terms and conditions
+        terms_conditions = extract_terms_and_conditions(soup)
+        if terms_conditions:
+            event_details["terms_and_conditions"] = terms_conditions
 
+        
+            
+        # Extract other sections if needed (organizer info, etc.)
+        # Add more sections here as needed
+        
+        return event_details
+        
+    except Exception as e:
+        logger.error(f"Error fetching event details: {e}")
+        return {"description": "Error fetching details", "venue_details": None, "terms_and_conditions": None}
+
+
+def extract_venue_details(soup):
+    """
+    Extract complete venue details from the event details page including all navigation options
+    """
+    venue_section = soup.select_one("section.eventdetailrow.ACTION-sec-venuedetails")
+    if not venue_section:
+        return None
+
+    # Get venue name and address
+    venue_info = venue_section.select_one("small")
+    if not venue_info:
+        return None
+    
+    # Extract venue text content
+    venue_text = venue_info.get_text(separator=" ", strip=True)
+    
+    # Try to get the venue name (within <b> tags)
+    venue_name_elem = venue_info.select_one("b")
+    venue_name = venue_name_elem.text.strip() if venue_name_elem else "N/A"
+    
+    # Get address (everything after the venue name)
+    address = venue_text.replace(venue_name, "", 1).strip() if venue_name != "N/A" else venue_text
+    
+    # Extract navigation links
+    nav_links = {}
+    
+    # Find the navigation links container
+    nav_container = venue_section.select_one("div.iconav")
+    if nav_container:
+        # Extract each navigation option by icon type
+        nav_items = nav_container.select("li a")
+        for nav_item in nav_items:
+            # Look for icon classes to determine type
+            icon = nav_item.select_one("i")
+            if icon:
+                nav_type = None
+                if icon.has_attr("class"):
+                    icon_class = " ".join(icon.get("class", []))
+                    if "car" in icon_class:
+                        nav_type = "driving"
+                    elif "train" in icon_class:
+                        nav_type = "transit"
+                    elif "map-bike" in icon_class:
+                        nav_type = "biking"
+                    elif "map-walk" in icon_class:
+                        nav_type = "walking"
+                
+                if nav_type and nav_item.has_attr("href"):
+                    nav_links[nav_type] = nav_item["href"]
+    
+    # Extract map image if available
+    map_img = venue_section.select_one("img")
+    map_url = map_img["src"] if map_img and map_img.has_attr("src") else None
+    map_title = map_img["title"] if map_img and map_img.has_attr("title") else None
+    
+    # Extract city and state information from the address
+    city = "N/A"
+    state = "N/A"
+    zip_code = "N/A"
+    street_address = "N/A"
+    
+    # Try to parse address components
+    if address != "N/A":
+        address_parts = address.split(",")
+        if len(address_parts) >= 1:
+            street_address = address_parts[0].strip()
+            
+        if len(address_parts) >= 2:
+            city = address_parts[-3].strip() if len(address_parts) >= 3 else address_parts[-2].strip()
+            
+        if len(address_parts) >= 3:
+            state_zip_part = address_parts[-2].strip() if len(address_parts) >= 4 else address_parts[-1].strip()
+            state_zip_bits = state_zip_part.split()
+            
+            if len(state_zip_bits) >= 1:
+                state = state_zip_bits[0].strip()
+                
+            if len(state_zip_bits) >= 2:
+                zip_code = state_zip_bits[1].strip()
+            
+    return {
+        "name": venue_name,
+        "full_address": address,
+        "street_address": street_address,
+        "city": city,
+        "state": state,
+        "zip_code": zip_code,
+        "navigation_links": nav_links,
+        "map_url": map_url,
+        "map_title": map_title
+    }
+
+
+def extract_event_performers(soup):
+    """
+    Extract event performers information from the event details page
+    """
+    performers_section = soup.select_one("div#div_eventpromers.ACTION-sec-artist") or soup.select_one("div.ACTION-sec-artist")
+    if not performers_section:
+        return None
+    
+    # Extract section title
+    title_elem = performers_section.select_one(".evesubtitle")
+    section_title = title_elem.text.strip() if title_elem else "Event Performers"
+    
+    # Initialize performers list
+    performers = []
+    
+    # Find all performer items
+    performer_items = performers_section.select(".owl-item .item")
+    
+    for item in performer_items:
+        performer_data = {}
+        
+        # Extract performer link
+        link_elem = item.select_one("a")
+        if link_elem and link_elem.has_attr("href"):
+            performer_data["link"] = link_elem["href"]
+            if link_elem.has_attr("title"):
+                performer_data["link_title"] = link_elem["title"]
+        
+        # Extract performer image
+        img_elem = item.select_one("figure img")
+        if img_elem and img_elem.has_attr("src"):
+            performer_data["image"] = img_elem["src"]
+            if img_elem.has_attr("title"):
+                performer_data["image_title"] = img_elem["title"]
+        
+        # Extract performer name
+        name_elem = item.select_one("figcaption")
+        if name_elem:
+            performer_data["name"] = name_elem.text.strip()
+        
+        # Only add performer if we have at least a name
+        if "name" in performer_data:
+            performers.append(performer_data)
+    
+    # If no performers found in carousel, try alternative selectors
+    if not performers:
+        # Try to find performers in the artist section
+        artist_section = performers_section.select_one("#Arists") or performers_section.select_one(".evepermrs")
+        if artist_section:
+            alt_performers = artist_section.select("a[title]")
+            for performer in alt_performers:
+                performer_data = {
+                    "name": performer.text.strip() if performer.text.strip() else "Unknown Performer",
+                    "link": performer["href"] if performer.has_attr("href") else None,
+                    "link_title": performer["title"] if performer.has_attr("title") else None
+                }
+                
+                # Extract image if available
+                img = performer.select_one("img")
+                if img and img.has_attr("src"):
+                    performer_data["image"] = img["src"]
+                
+                # Only add if there's at least some information
+                if performer_data["name"] != "Unknown Performer" or performer_data["link"]:
+                    performers.append(performer_data)
+    
+    return {
+        "title": section_title,
+        "performers": performers
+    }
+def extract_terms_and_conditions(soup):
+    """
+    Extract only the visible Terms & Conditions information from the event details page
+    """
+    terms_section = soup.select_one("section.eventdetailrow.ACTION-sec-condition")
+    if not terms_section:
+        return None
+    
+    # Extract the section title
+    title_elem = terms_section.select_one(".evesubtitle")
+    section_title = title_elem.text.strip() if title_elem else "Terms & Conditions"
+    
+    # Get the article container
+    article = terms_section.select_one("article")
+    if not article:
+        return {
+            "title": section_title,
+            "terms": []
+        }
+    
+    # Extract only visible paragraph elements
+    terms = []
+    
+    # Process all paragraphs, skipping those with the "hide" class
+    for p in article.select("p"):
+        # Skip hidden terms
+        if p.has_attr("class") and "hide" in p["class"]:
+            continue
+            
+        term_text = p.get_text(separator=" ", strip=True)
+        if term_text:
+            terms.append(term_text)
+    
+    # Get location information if available
+    location_id = article.get("id", "") if article.has_attr("id") else None
+    
+    return {
+        "title": section_title,
+        "location_id": location_id,
+        "terms": terms
+    }
 
 def extract_formatted_paragraphs(section):
-
+    """
+    Extract formatted paragraphs from event description section
+    """
+    if not section:
+        return "N/A"
+        
     p_tags = section.select("p.MsoNormal")
     cleaned_texts = []
+
+    # If no MsoNormal paragraphs found, try regular paragraphs
+    if not p_tags:
+        p_tags = section.select("p")
 
     for p in p_tags:
         # Get text and normalize internal line breaks
@@ -239,4 +500,4 @@ def extract_formatted_paragraphs(section):
             cleaned_texts.append(normalized_text)
 
     final_output = "\n\n".join(cleaned_texts)
-    return final_output
+    return final_output if final_output else "N/A"
