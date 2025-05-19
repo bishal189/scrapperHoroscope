@@ -232,6 +232,10 @@ def extract_event_data_from_upcoming_card(card_area, article=None):
         # Add ticket information
         if "ticket_information" in event_details_data and event_details_data["ticket_information"]:
             event_data["ticket_information"] = event_details_data["ticket_information"]
+
+
+       
+    
             
     
     return event_data
@@ -254,7 +258,6 @@ def extract_event_details_inside_link(link):
     try:
         response = requests.get(link, headers=headers, timeout=15)
         response.raise_for_status()
-        print("link", link)
         soup = BeautifulSoup(response.text, "html.parser")
         
         event_details = {}
@@ -289,6 +292,10 @@ def extract_event_details_inside_link(link):
         ticket_info = extract_ticket_information(soup)
         if ticket_info:
             event_details["ticket_information"] = ticket_info
+
+
+        
+
             
         # Extract other sections if needed (organizer info, etc.)
         # Add more sections here as needed
@@ -775,3 +782,5 @@ def extract_ticket_information(soup):
         }
     
     return ticket_info
+
+
