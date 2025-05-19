@@ -220,6 +220,14 @@ def extract_event_data_from_upcoming_card(card_area, article=None):
         # Add terms and conditions
         if "terms_and_conditions" in event_details_data and event_details_data["terms_and_conditions"]:
             event_data["terms_and_conditions"] = event_details_data["terms_and_conditions"]
+            
+        # Add artist details
+        if "artist_details" in event_details_data and event_details_data["artist_details"]:
+            event_data["artist_details"] = event_details_data["artist_details"]
+            
+        # Add organizer details
+        if "organizer_details" in event_details_data and event_details_data["organizer_details"]:
+            event_data["organizer_details"] = event_details_data["organizer_details"]
     
     return event_data
 
@@ -261,7 +269,17 @@ def extract_event_details_inside_link(link):
         if terms_conditions:
             event_details["terms_and_conditions"] = terms_conditions
 
+        # Extract artist details
+        artist_details = extract_artist_details(soup)
+        print(artist_details,'artist details')
+        if artist_details:
+            event_details["artist_details"] = artist_details
         
+        # Extract organizer details
+        organizer_details = extract_organizer_details(soup)
+        print(organizer_details,'organizer details')
+        if organizer_details:
+            event_details["organizer_details"] = organizer_details
             
         # Extract other sections if needed (organizer info, etc.)
         # Add more sections here as needed
@@ -366,76 +384,6 @@ def extract_venue_details(soup):
     }
 
 
-def extract_event_performers(soup):
-    """
-    Extract event performers information from the event details page
-    """
-    performers_section = soup.select_one("div#div_eventpromers.ACTION-sec-artist") or soup.select_one("div.ACTION-sec-artist")
-    if not performers_section:
-        return None
-    
-    # Extract section title
-    title_elem = performers_section.select_one(".evesubtitle")
-    section_title = title_elem.text.strip() if title_elem else "Event Performers"
-    
-    # Initialize performers list
-    performers = []
-    
-    # Find all performer items
-    performer_items = performers_section.select(".owl-item .item")
-    
-    for item in performer_items:
-        performer_data = {}
-        
-        # Extract performer link
-        link_elem = item.select_one("a")
-        if link_elem and link_elem.has_attr("href"):
-            performer_data["link"] = link_elem["href"]
-            if link_elem.has_attr("title"):
-                performer_data["link_title"] = link_elem["title"]
-        
-        # Extract performer image
-        img_elem = item.select_one("figure img")
-        if img_elem and img_elem.has_attr("src"):
-            performer_data["image"] = img_elem["src"]
-            if img_elem.has_attr("title"):
-                performer_data["image_title"] = img_elem["title"]
-        
-        # Extract performer name
-        name_elem = item.select_one("figcaption")
-        if name_elem:
-            performer_data["name"] = name_elem.text.strip()
-        
-        # Only add performer if we have at least a name
-        if "name" in performer_data:
-            performers.append(performer_data)
-    
-    # If no performers found in carousel, try alternative selectors
-    if not performers:
-        # Try to find performers in the artist section
-        artist_section = performers_section.select_one("#Arists") or performers_section.select_one(".evepermrs")
-        if artist_section:
-            alt_performers = artist_section.select("a[title]")
-            for performer in alt_performers:
-                performer_data = {
-                    "name": performer.text.strip() if performer.text.strip() else "Unknown Performer",
-                    "link": performer["href"] if performer.has_attr("href") else None,
-                    "link_title": performer["title"] if performer.has_attr("title") else None
-                }
-                
-                # Extract image if available
-                img = performer.select_one("img")
-                if img and img.has_attr("src"):
-                    performer_data["image"] = img["src"]
-                
-                # Only add if there's at least some information
-                if performer_data["name"] != "Unknown Performer" or performer_data["link"]:
-                    performers.append(performer_data)
-    
-    return {
-        "title": section_title,
-        "performers": performers
-    }
 def extract_terms_and_conditions(soup):
     """
     Extract only the visible Terms & Conditions information from the event details page
@@ -501,3 +449,243 @@ def extract_formatted_paragraphs(section):
 
     final_output = "\n\n".join(cleaned_texts)
     return final_output if final_output else "N/A"
+
+
+def extract_artist_details(soup):
+    """
+    Extract artist details from the event details page sidebar
+    """
+    artist_article = soup.select_one("aside article.rhsbg div.atistdetailswrp")
+    if not artist_article:
+        return None
+    
+    artist_details = {}
+    
+    # Extract from artist details section
+    artist_item = artist_article.select_one("ul li div.artistbg")
+    if artist_item:
+        # Extract artist image
+        img_elem = artist_item.select_one("figure img")
+        if img_elem:
+            artist_details["image"] = img_elem.get("src", "")
+            if img_elem.has_attr("alt"):
+                artist_details["image_alt"] = img_elem.get("alt", "")
+        
+        # Extract artist name and link
+        name_elem = artist_item.select_one("h3 a")
+        if name_elem:
+            artist_details["name"] = name_elem.text.strip()
+            if name_elem.has_attr("href"):
+                artist_details["link"] = name_elem.get("href", "")
+            if name_elem.has_attr("title"):
+                artist_details["link_title"] = name_elem.get("title", "")
+        
+        # Extract artist description
+        description_elem = artist_item.select_one("p")
+        if description_elem:
+            # Get the text but exclude the "More »" link text
+            more_link = description_elem.select_one("a")
+            if more_link:
+                more_link.extract()  # Remove the link from the paragraph
+            
+            artist_details["description"] = description_elem.text.strip()
+            
+            # Add the "more" link separately if needed
+            more_link = artist_item.select_one("p a")
+            if more_link and more_link.has_attr("href"):
+                artist_details["more_link"] = more_link.get("href", "")
+    
+    # Extract tour information if available
+    tour_article = soup.select_one("div#div_artistcurrent article")
+    if tour_article:
+        tour_title_elem = tour_article.select_one("div.rhstitle span")
+        if tour_title_elem:
+            artist_details["tour_title"] = tour_title_elem.text.strip()
+        
+        # Extract upcoming shows
+        upcoming_shows = []
+        show_items = tour_article.select("div.atistdetailswrp ul li div.atistdetails")
+        
+        for show in show_items:
+            show_info = {}
+            
+            # Extract date
+            date_elem = show.select_one("div.datewrp")
+            if date_elem:
+                day_elem = date_elem.select_one("span.day")
+                month_elem = date_elem.select_one("span.month")
+                
+                if day_elem and month_elem:
+                    show_info["day"] = day_elem.text.strip()
+                    show_info["month"] = month_elem.text.strip()
+            
+            # Extract location details
+            location_info = show.select_one("div.dateloc ul.whnwre")
+            if location_info:
+                # City/state
+                city_elem = location_info.select_one("li h3.h3 a")
+                if city_elem:
+                    show_info["title"] = city_elem.get("title", "") if city_elem.has_attr("title") else ""
+                    show_info["location_link"] = city_elem.get("href", "") if city_elem.has_attr("href") else ""
+                    show_info["city"] = city_elem.text.strip()
+                
+                # Time information
+                time_elem = location_info.select_one("li.times")
+                if time_elem:
+                    show_info["time"] = time_elem.text.strip().replace("\xa0", " ")
+                
+                # Venue information
+                venue_elem = location_info.select_one("li.venuename")
+                if venue_elem:
+                    venue_text = venue_elem.text.strip().replace("\xa0", " ")
+                    
+                    # Try to extract venue name and address
+                    venue_link = venue_elem.select_one("a")
+                    if venue_link:
+                        show_info["venue_name"] = venue_link.text.strip()
+                        show_info["venue_link"] = venue_link.get("href", "") if venue_link.has_attr("href") else ""
+                        
+                        # Address is the text after the venue name
+                        venue_text_parts = venue_text.split(show_info["venue_name"], 1)
+                        if len(venue_text_parts) > 1:
+                            show_info["venue_address"] = venue_text_parts[1].strip().strip(',')
+                    else:
+                        # No link - just extract the text
+                        show_info["venue_info"] = venue_text
+            
+            if show_info:  # Only add if we have some info
+                upcoming_shows.append(show_info)
+        
+        if upcoming_shows:
+            artist_details["upcoming_shows"] = upcoming_shows
+    
+    return artist_details
+
+
+def extract_organizer_details(soup):
+    """
+    Extract organizer details from the event details page
+    """
+    # Fix the CSS selector for compatibility
+    # Using a more general selector that doesn't rely on :contains
+    organizer_section = soup.select_one("section.eventdetailrow h2.evesubtitle")
+    if organizer_section and "Organizer Details" in organizer_section.text:
+        organizer_section = organizer_section.parent  # Get the parent section
+    else:
+        # Try alternative approach to find the organizer section
+        for section in soup.select("section.eventdetailrow"):
+            title = section.select_one("h2.evesubtitle")
+            if title and "Organizer Details" in title.text:
+                organizer_section = section
+                break
+        else:
+            return None
+    
+    organizer_details = {}
+    
+    # Extract section title
+    title_elem = organizer_section.select_one("h2.evesubtitle")
+    if title_elem:
+        organizer_details["title"] = title_elem.text.strip()
+    
+    # Extract organizer information
+    org_article = organizer_section.select_one("article.orgwrap")
+    if org_article:
+        # Extract organizer logo
+        logo_elem = org_article.select_one("div.orglogo figure img")
+        if logo_elem:
+            organizer_details["logo"] = logo_elem.get("src", "") if logo_elem.has_attr("src") else ""
+            if logo_elem.has_attr("title"):
+                organizer_details["logo_title"] = logo_elem.get("title", "")
+        
+        # Extract organizer name and event count
+        org_details_div = org_article.select_one("div.org-detals")
+        if org_details_div:
+            # Organizer name
+            name_elem = org_details_div.select_one("b")
+            if name_elem:
+                organizer_details["name"] = name_elem.text.strip()
+            
+            # Upcoming events count
+            events_link = org_details_div.select_one("a.upcmtext")
+            if events_link:
+                organizer_details["events_link"] = events_link.get("href", "") if events_link.has_attr("href") else ""
+                if events_link.has_attr("title"):
+                    organizer_details["events_link_title"] = events_link.get("title", "")
+                
+                # Extract the number from the text (e.g., "20 Upcoming Event(s)")
+                events_text = events_link.text.strip()
+                import re
+                events_count_match = re.search(r'(\d+)\s+Upcoming\s+Event', events_text)
+                if events_count_match:
+                    organizer_details["upcoming_events_count"] = events_count_match.group(1)
+        
+        # Extract action links
+        action_div = org_article.select_one("div.org-action")
+        if action_div:
+            # Profile link
+            profile_link = action_div.select_one("a[title*='Profile']")
+            if profile_link:
+                organizer_details["profile_link"] = profile_link.get("href", "") if profile_link.has_attr("href") else ""
+            
+            # Follow/Following links (these are usually JavaScript actions)
+            follow_link = action_div.select_one("a.btn-follow605")
+            if follow_link:
+                organizer_details["follow_link_available"] = True
+    
+    # Extract events by this organizer
+    org_events_div = soup.select_one("div#div_orgmasterevents article")
+    if org_events_div:
+        events_list = []
+        
+        # Get all event items
+        event_items = org_events_div.select("div.orgartistinfo ul li")
+        
+        for event in event_items:
+            event_info = {}
+            
+            # Artist name
+            artist_name_elem = event.select_one("h3.artistname a")
+            if artist_name_elem:
+                event_info["artist_name"] = artist_name_elem.text.strip()
+                event_info["artist_link"] = artist_name_elem.get("href", "") if artist_name_elem.has_attr("href") else ""
+            
+            # Event image
+            img_elem = event.select_one("figure img")
+            if img_elem:
+                event_info["image"] = img_elem.get("src", "") if img_elem.has_attr("src") else ""
+                if img_elem.has_attr("title"):
+                    event_info["image_title"] = img_elem.get("title", "")
+            
+            # Event title
+            title_elem = event.select_one("small a")
+            if title_elem:
+                event_info["title"] = title_elem.text.strip()
+                event_info["link"] = title_elem.get("href", "") if title_elem.has_attr("href") else ""
+                if title_elem.has_attr("title"):
+                    event_info["link_title"] = title_elem.get("title", "")
+            
+            # Event time/date
+            time_elem = event.select_one("span.timezone")
+            if time_elem:
+                event_info["time"] = time_elem.text.strip().replace("\xa0", " ")
+            
+            # Venue
+            venue_elem = event.select_one("p")
+            if venue_elem:
+                event_info["venue"] = venue_elem.text.strip().replace("\xa0", " ")
+            
+            # Ticket link
+            ticket_link = event.select_one("a.btn-ghost-red1")
+            if ticket_link:
+                event_info["ticket_link"] = ticket_link.get("href", "") if ticket_link.has_attr("href") else ""
+                if ticket_link.has_attr("title"):
+                    event_info["ticket_link_title"] = ticket_link.get("title", "")
+            
+            if event_info:  # Only add if we extracted some info
+                events_list.append(event_info)
+        
+        if events_list:
+            organizer_details["events"] = events_list
+    
+    return organizer_details
