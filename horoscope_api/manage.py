@@ -9,6 +9,9 @@ def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'horoscope_api.settings')
     try:
         from django.core.management import execute_from_command_line
+        if len(sys.argv) > 1 and sys.argv[1] in ["makemigrations", "migrate"]:
+            from horoscope_api.migration_blocker import block_migrations
+            block_migrations()
     except ImportError as exc:
         raise ImportError(
             "Couldn't import Django. Are you sure it's installed and "
