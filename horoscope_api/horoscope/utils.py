@@ -16,6 +16,7 @@ async def scrape_horoscope():
     """ Scrapes all horoscope links and their details asynchronously """
     url = f"{BASE_URL}/horoscope/"
 
+    print("url",url)
     async with aiohttp.ClientSession() as session:
         page_content = await fetch(session, url)
 

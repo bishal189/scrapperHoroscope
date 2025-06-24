@@ -17,6 +17,43 @@ class CommunityEvents(models.Model):
     link = models.TextField(blank=True, null=True)
     event_date = models.TextField(blank=True, null=True)
 
+    event_id = models.TextField(blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    category = models.TextField(blank=True, null=True)
+    action_type = models.TextField(blank=True, null=True)
+    event_url = models.TextField(blank=True, null=True)
+
+    # Venue Details
+    venue_name = models.TextField(blank=True, null=True)
+    venue_full_address = models.TextField(blank=True, null=True)
+    venue_street = models.TextField(blank=True, null=True)
+    venue_city = models.TextField(blank=True, null=True)
+    venue_state = models.TextField(blank=True, null=True)
+    venue_zip = models.TextField(blank=True, null=True)
+
+    # Terms & Conditions
+    terms_title = models.TextField(blank=True, null=True)
+    terms_location = models.TextField(blank=True, null=True)
+    terms_list = models.TextField(blank=True, null=True)  # Store JSON or newline-separated terms
+
+    # Artist Details
+    artist_name = models.TextField(blank=True, null=True)
+    artist_image = models.TextField(blank=True, null=True)
+    artist_description = models.TextField(blank=True, null=True)
+    artist_link = models.TextField(blank=True, null=True)
+
+    # Organizer Details
+    organizer_name = models.TextField(blank=True, null=True)
+    organizer_logo = models.TextField(blank=True, null=True)
+    organizer_events_link = models.TextField(blank=True, null=True)
+    organizer_upcoming_count = models.TextField(blank=True, null=True)
+    organizer_follow_available = models.BooleanField(default=False)
+
+    # Ticket Information
+    ticket_types = models.TextField(blank=True, null=True)  # Store JSON array as string
+    ticket_action_button = models.TextField(blank=True, null=True)
+
+
     class Meta:
         managed = False
         db_table = 'community_events'

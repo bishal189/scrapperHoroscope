@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from django.http import JsonResponse
 from .utils import scrape_sulekha_events
 
@@ -22,14 +21,60 @@ def insert_events_into_db(data):
     for event in all_events:
         try:
 
-            name = event.get("title", "")
             state = state_name
             city = city_name
+            name = event.get("title", "")
+            event_id = event.get("id", "")
+            event_date = event.get("date", "")
             location = event.get("location", "")
             venue = event.get("venue", "")
             price = event.get("price", "")
-            event_date = event.get("date", "")
-            performers = event.get("performers", "")
+            status = event.get("status", "")
+            category = event.get("category", "")
+            performers = event.get("performers", [])
+            image_url = event.get("image", "")
+            action_type = event.get("action_type", "")
+            event_url = event.get("link", "")
+            description = event.get("description", "")
+
+            # Venue details (excluding map links)
+            venue_details = event.get("venue_details", {})
+            venue_name = venue_details.get("name", "")
+            venue_full_address = venue_details.get("full_address", "")
+            venue_street = venue_details.get("street_address", "")
+            venue_city = venue_details.get("city", "")
+            venue_state = venue_details.get("state", "")
+            venue_zip = venue_details.get("zip_code", "")
+
+            # Terms & Conditions
+            terms_data = event.get("terms_and_conditions", {})
+            terms_title = terms_data.get("title", "")
+            terms_location = terms_data.get("location_id", "")
+            terms_list = terms_data.get("terms", [])
+
+            # Artist Details
+            artist_details = event.get("artist_details", {})
+            artist_name = artist_details.get("name", "")
+            artist_image = artist_details.get("image", "")
+            artist_description = artist_details.get("description", "")
+            artist_link = artist_details.get("link", "")
+
+            # Organizer Details
+            organizer_details = event.get("organizer_details", {})
+            organizer_name = organizer_details.get("name", "")
+            organizer_logo = organizer_details.get("logo", "")
+            organizer_events_link = organizer_details.get("events_link", "")
+            organizer_upcoming_count = organizer_details.get(
+                "upcoming_events_count", ""
+            )
+            organizer_follow_available = organizer_details.get(
+                "follow_link_available", False
+            )
+
+            # Ticket Information
+            ticket_info = event.get("ticket_information", {})
+            ticket_types = ticket_info.get("ticket_types", [])
+            ticket_action_button = ticket_info.get("action_button", {}).get("text", "")
 
             # Check if this event already exists
             existing = CommunityEvents.objects.filter(
@@ -46,6 +91,7 @@ def insert_events_into_db(data):
                 print(f"Already exists: {name}")
                 existing.delete()
 
+            """
             CommunityEvents.objects.create(
                 name=event.get("title", ""),
                 state=state_name,
@@ -62,6 +108,55 @@ def insert_events_into_db(data):
                 link=event.get("link", ""),
                 event_date=event.get("date", ""),
             )
+            """
+
+            CommunityEvents.objects.create(
+                name=name,
+                event_id=event_id,
+                event_date=event_date,
+                location=location,
+                venue=venue,
+                price=price,
+                status=status,
+                category=category,
+                performers=performers,
+                cover_image=image_url,
+                action_type=action_type,
+                event_url=event_url,
+                description=description,
+                # Venue Details
+                venue_name=venue_name,
+                venue_full_address=venue_full_address,
+                venue_street=venue_street,
+                venue_city=venue_city,
+                venue_state=venue_state,
+                venue_zip=venue_zip,
+                # Terms & Conditions
+                terms_title=terms_title,
+                terms_location=terms_location,
+                terms_list=terms_list,
+                # Artist Details
+                artist_name=artist_name,
+                artist_image=artist_image,
+                artist_description=artist_description,
+                artist_link=artist_link,
+                # Organizer Details
+                organizer_name=organizer_name,
+                organizer_logo=organizer_logo,
+                organizer_events_link=organizer_events_link,
+                organizer_upcoming_count=organizer_upcoming_count,
+                organizer_follow_available=organizer_follow_available,
+                # Ticket Info
+                ticket_types=ticket_types,
+                ticket_action_button=ticket_action_button,
+                # Required Fields
+                state=state_name,
+                city=city_name,
+                time="",
+                created_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+
             print(f"Inserted: {event.get('title')}")
         except Exception as e:
             print(f"Failed to insert {event.get('title')}: {e}")
@@ -176,6 +271,7 @@ def events(request):
             return JsonResponse({"error": "City parameter is required."}, status=400)
 
         events = scrape_sulekha_events(city_value)
+        print("events", events)
 
         insert_events_into_db({"city": city_key, "events": events})
 
